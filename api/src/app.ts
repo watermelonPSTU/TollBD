@@ -44,6 +44,10 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR), { maxAge: '1d' }));
 app.use(requestLogger);
 
+app.get('/', (_req, res) => {
+  res.json({ success: true, data: { name: 'TollBD API', docs: '/api/v1', health: '/health' }, message: null, error: null });
+});
+
 // Health check BEFORE rate limiter — Railway polls this frequently
 app.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', env: env.NODE_ENV, ts: new Date().toISOString() }, message: null, error: null });

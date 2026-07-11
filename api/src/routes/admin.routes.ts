@@ -9,7 +9,7 @@ import { validate } from '../middleware/validate.middleware';
 import { announcementSchema, blockUserSchema, updateAnnouncementSchema } from '../schemas/admin.schema';
 import { bridgeCreateSchema, bridgeUpdateSchema, tollRateSchema } from '../schemas/bridge.schema';
 import { broadcastSchema } from '../schemas/notification.schema';
-import { approveTransactionSchema, refundSchema } from '../schemas/toll.schema';
+import { refundSchema } from '../schemas/toll.schema';
 import { adminVerifySchema } from '../schemas/vehicle.schema';
 
 export const adminRoutes = Router();
@@ -32,7 +32,6 @@ adminRoutes.put('/bridges/:id/rates', validate(tollRateSchema), bridgeController
 
 adminRoutes.get('/transactions', tollController.adminGetTransactions);
 adminRoutes.post('/transactions/:id/refund', validate(refundSchema), tollController.refundTransaction);
-adminRoutes.patch('/transactions/:id/approve', validate(approveTransactionSchema), tollController.approveTransaction);
 
 adminRoutes.get('/announcements', adminController.getAnnouncements);
 adminRoutes.post('/announcements', validate(announcementSchema), adminController.createAnnouncement);

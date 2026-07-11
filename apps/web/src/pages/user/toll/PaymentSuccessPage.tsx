@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRDisplay } from '@/components/shared';
 import { useCapacitor } from '@/hooks/useCapacitor';
 import { useUIStore } from '@/store/uiStore';
@@ -10,11 +10,18 @@ export const PaymentSuccessPage = () => {
   const txId = params.get('txId') ?? params.get('transactionId') ?? 'SUCCESS';
   const clear = useUIStore((state) => state.clearTollSelection);
   const { vibrate } = useCapacitor();
+  const navigate = useNavigate();
 
   useEffect(() => {
     clear();
     vibrate();
   }, [clear, vibrate]);
+
+  // Return to the homepage automatically after a successful payment
+  useEffect(() => {
+    const timer = setTimeout(() => navigate('/home', { replace: true }), 5000);
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
   return (
     <main className="relative flex min-h-screen flex-col items-center overflow-hidden bg-bg px-6 pb-10 pt-16 text-center">
@@ -51,6 +58,7 @@ export const PaymentSuccessPage = () => {
       </div>
 
       <div className="mt-auto w-full pt-8">
+        <p className="mb-3 font-bengali text-xs text-text-muted animate-pulse">হোমপেজে ফিরে যাচ্ছি…</p>
         <div className="grid grid-cols-2 gap-3">
           <Link
             to="/home"

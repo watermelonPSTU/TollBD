@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from './config/env';
-import { errorMiddleware } from './middleware/error.middleware';
+import { AppError, errorMiddleware } from './middleware/error.middleware';
 import { generalLimiter } from './middleware/rateLimit.middleware';
 import { routes } from './routes';
 import { requestLogger } from './config/logger';
@@ -17,6 +17,9 @@ const allowedOrigins = [
   // Capacitor WebView origins (Android serves the bundled app from https://localhost)
   'https://localhost',
   'capacitor://localhost',
+  // SSLCommerz posts payment callbacks from the gateway page in the user's browser
+  'https://sandbox.sslcommerz.com',
+  'https://securepay.sslcommerz.com',
   // Accept Railway-injected public domain (set RAILWAY_PUBLIC_DOMAIN in dashboard)
   ...(process.env.RAILWAY_PUBLIC_DOMAIN ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`] : [])
 ].filter(Boolean);
@@ -37,7 +40,8 @@ app.use(
       if (env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
         return callback(null, true);
       }
-      callback(new Error(`CORS: origin ${origin} not allowed`));
+      // AppError so the error middleware answers 403 instead of a generic 500
+      callback(new AppError(`CORS: origin ${origin} not allowed`, 403, 'CORS_NOT_ALLOWED'));
     },
     credentials: true
   })

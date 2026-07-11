@@ -14,6 +14,9 @@ export const app = express();
 
 const allowedOrigins = [
   env.FRONTEND_URL,
+  // Capacitor WebView origins (Android serves the bundled app from https://localhost)
+  'https://localhost',
+  'capacitor://localhost',
   // Accept Railway-injected public domain (set RAILWAY_PUBLIC_DOMAIN in dashboard)
   ...(process.env.RAILWAY_PUBLIC_DOMAIN ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`] : [])
 ].filter(Boolean);

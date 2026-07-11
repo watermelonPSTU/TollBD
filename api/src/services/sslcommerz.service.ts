@@ -16,6 +16,9 @@ export interface SSLSessionParams {
   customerEmail: string;
   customerPhone?: string | null;
   productName: string;
+  // Round-tripped via SSLCommerz custom fields; tran_id is capped at 30 chars
+  // by SSLCommerz, so IDs longer than that must travel in value_a instead
+  valueA?: string;
 }
 
 const mockSession = (transactionId: string, amountTaka: number) => ({
@@ -52,7 +55,8 @@ export const createSession = async (params: SSLSessionParams) => {
         shipping_method: 'NO',
         product_name: params.productName,
         product_category: 'Toll',
-        product_profile: 'general'
+        product_profile: 'general',
+        ...(params.valueA ? { value_a: params.valueA } : {})
       }),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
     );
@@ -82,14 +86,16 @@ export const validateIPN = async (params: Record<string, unknown>) => {
   const transactionId = String(params.tran_id ?? params.transactionId ?? '');
   const status = String(params.status ?? '').toUpperCase();
   const amount = Number(params.amount ?? params.store_amount ?? 0);
+  const valueA = String(params.value_a ?? '');
   const isMock = params.mock === '1' || params.mock === 1;
 
   if (!env.SSLCOMMERZ_STORE_ID || !env.SSLCOMMERZ_STORE_PASS || isMock) {
-    return { valid: status === 'VALID' || status === 'SUCCESS' || Boolean(transactionId), amount, transactionId, status };
+    return { valid: status === 'VALID' || status === 'SUCCESS' || Boolean(transactionId), amount, transactionId, status, valueA };
   }
 
   if (!valId) {
-    return { valid: false, amount, transactionId, status };
+    logger.warn('SSLCommerz callback without val_id', { transactionId, status });
+    return { valid: false, amount, transactionId, status, valueA };
   }
 
   const response = await axios.get(`${baseUrl}/validator/api/validationserverAPI.php`, {
@@ -103,10 +109,14 @@ export const validateIPN = async (params: Record<string, unknown>) => {
   });
 
   const validationStatus = String(response.data?.status ?? '').toUpperCase();
+  if (!['VALID', 'VALIDATED'].includes(validationStatus)) {
+    logger.warn('SSLCommerz validation rejected', { validationStatus, transactionId, valId });
+  }
   return {
     valid: ['VALID', 'VALIDATED'].includes(validationStatus),
     amount: Number(response.data?.amount ?? amount),
     transactionId: String(response.data?.tran_id ?? transactionId),
-    status: validationStatus
+    status: validationStatus,
+    valueA: String(response.data?.value_a ?? valueA)
   };
 };

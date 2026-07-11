@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import { Prisma, TransactionStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
+import { logger } from '../config/logger';
 import { AppError } from '../middleware/error.middleware';
 import * as sslcommerz from './sslcommerz.service';
 
@@ -75,7 +77,8 @@ export const debitWallet = async (userId: string, amountPaisa: number, descripti
 
 export const initDeposit = async (userId: string, amountPaisa: number, method: string) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  const transactionId = `dep_${userId}_${Date.now()}`;
+  // SSLCommerz caps tran_id at 30 chars — keep it short and carry userId in value_a
+  const transactionId = `dep_${randomBytes(10).toString('hex')}`;
   const session = await sslcommerz.createSession({
     amount: amountPaisa / 100,
     currency: 'BDT',
@@ -86,13 +89,14 @@ export const initDeposit = async (userId: string, amountPaisa: number, method: s
     customerName: user.fullName,
     customerEmail: user.email,
     customerPhone: user.phone,
-    productName: `TollBD Wallet Deposit ${method}`
+    productName: `TollBD Wallet Deposit ${method}`,
+    valueA: userId
   });
 
   return { ...session, transactionId, amount: amountPaisa, amountTaka: amountPaisa / 100 };
 };
 
-export const handleDepositSuccess = async (params: Record<string, unknown>) => {
+export const handleDepositSuccess = async (params: Record<string, unknown>, knownUserId?: string) => {
   const validation = await sslcommerz.validateIPN(params);
   if (!validation.valid) {
     throw new AppError('SSLCommerz payment validation failed', 400, 'INVALID_PAYMENT');
@@ -104,9 +108,11 @@ export const handleDepositSuccess = async (params: Record<string, unknown>) => {
     return { transactionId, credited: false };
   }
 
-  const userId = String(transactionId.split('_')[1] ?? '');
+  // userId travels in value_a; legacy tran_ids embedded it as dep_<userId>_<ts>
+  const userId = knownUserId || validation.valueA || String(transactionId.split('_')[1] ?? '');
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
+    logger.error('Deposit user not found from callback', { transactionId, valueA: validation.valueA });
     throw new AppError('Deposit user not found', 404, 'DEPOSIT_USER_NOT_FOUND');
   }
 

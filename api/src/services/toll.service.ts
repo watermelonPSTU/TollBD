@@ -61,14 +61,16 @@ export const initTollPayment = async (userId: string, vehicleId: string, bridgeI
   const session = await sslcommerz.createSession({
     amount: amount / 100,
     currency: 'BDT',
-    transactionId: transaction.id,
+    // SSLCommerz caps tran_id at 30 chars; the full uuid travels in value_a
+    transactionId: transaction.id.replace(/-/g, '').slice(0, 30),
     successUrl: `${env.API_BASE_URL}/api/v1/toll/success`,
     failUrl: `${env.FRONTEND_URL}/toll/failed`,
     cancelUrl: `${env.FRONTEND_URL}/toll/cancelled`,
     customerName: user.fullName,
     customerEmail: user.email,
     customerPhone: user.phone,
-    productName: `TollBD Toll Payment ${bridge.name}`
+    productName: `TollBD Toll Payment ${bridge.name}`,
+    valueA: transaction.id
   });
 
   await prisma.transaction.update({
@@ -81,7 +83,8 @@ export const initTollPayment = async (userId: string, vehicleId: string, bridgeI
 
 export const handleSSLCommerzCallback = async (params: Record<string, unknown>) => {
   const validation = await sslcommerz.validateIPN(params);
-  const transactionId = validation.transactionId || String(params.tran_id ?? '');
+  // value_a carries the full transaction uuid (tran_id is truncated to 30 chars by SSLCommerz)
+  const transactionId = validation.valueA || validation.transactionId || String(params.tran_id ?? '');
   const transaction = await prisma.transaction.findFirst({
     where: { OR: [{ id: transactionId }, { sslSessionKey: String(params.sessionkey ?? '') }] }
   });

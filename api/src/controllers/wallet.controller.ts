@@ -33,11 +33,14 @@ export const depositFailed = async (_req: Request, res: Response) => {
 
 export const completeMockDeposit = async (req: Request, res: Response) => {
   const { transactionId, amount } = req.body;
-  const result = await walletService.handleDepositSuccess({
-    tran_id: transactionId,
-    status: 'VALID',
-    amount,
-    mock: 1
-  });
+  const result = await walletService.handleDepositSuccess(
+    {
+      tran_id: transactionId,
+      status: 'VALID',
+      amount,
+      mock: 1
+    },
+    req.user!.id
+  );
   return success(res, result);
 };

@@ -4,6 +4,7 @@ import { AppError } from '../middleware/error.middleware';
 import { processVehiclePhoto, saveToUploads } from '../middleware/upload.middleware';
 import * as brtaService from './brta.service';
 import { sendToUser } from './push.service';
+//
 
 type VehicleData = {
   registrationNumber?: string;

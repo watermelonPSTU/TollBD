@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { env } from '../config/env';
+import { logger } from '../config/logger';
 import { AppError } from '../middleware/error.middleware';
 
 const baseUrl = env.SSLCOMMERZ_IS_LIVE ? 'https://securepay.sslcommerz.com' : 'https://sandbox.sslcommerz.com';
@@ -57,6 +58,11 @@ export const createSession = async (params: SSLSessionParams) => {
     );
 
     if (!response.data?.GatewayPageURL || !response.data?.sessionkey) {
+      logger.error('SSLCommerz session rejected', {
+        isLive: env.SSLCOMMERZ_IS_LIVE,
+        status: response.data?.status,
+        failedreason: response.data?.failedreason
+      });
       if (env.NODE_ENV !== 'production') return mockSession(params.transactionId, params.amount);
       throw new AppError('SSLCommerz session creation failed', 502, 'SSLCOMMERZ_SESSION_FAILED');
     }

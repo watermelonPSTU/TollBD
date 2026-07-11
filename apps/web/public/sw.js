@@ -1,4 +1,4 @@
-const CACHE = 'tollbd-v2';
+const CACHE = 'tollbd-v3';
 const PRECACHE = ['/manifest.json', '/index.html'];
 
 self.addEventListener('install', (event) => {
@@ -29,7 +29,9 @@ self.addEventListener('fetch', (event) => {
     fetch(request)
       .then((response) => {
         if (response.ok && response.type === 'basic') {
-          caches.open(CACHE).then((c) => c.put(request, response.clone()));
+          // Clone BEFORE returning — cloning later races with the body being consumed
+          const copy = response.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
         }
         return response;
       })

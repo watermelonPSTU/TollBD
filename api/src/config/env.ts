@@ -16,7 +16,12 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().default(''),
   SSLCOMMERZ_STORE_ID: z.string().optional().default(''),
   SSLCOMMERZ_STORE_PASS: z.string().optional().default(''),
-  SSLCOMMERZ_IS_LIVE: z.coerce.boolean().default(false),
+  // Note: z.coerce.boolean() would turn the string "false" into true — parse explicitly
+  SSLCOMMERZ_IS_LIVE: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((v) => ['true', '1', 'yes'].includes(v.toLowerCase())),
   VAPID_PUBLIC_KEY: z.string().optional().default(''),
   VAPID_PRIVATE_KEY: z.string().optional().default(''),
   VAPID_EMAIL: z.string().email().optional().default('admin@tollbd.com.bd'),

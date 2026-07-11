@@ -34,7 +34,10 @@ export const getUserById = (id: string) => apiClient.get(`/admin/users/${id}`).t
 }>);
 
 export const getAllVehicles = (params?: { status?: string; page?: number; limit?: number }) =>
-  apiClient.get('/admin/vehicles', { params }).then(unwrap<Vehicle[]>);
+  apiClient
+    .get('/admin/vehicles', { params })
+    .then(unwrap<{ items: Vehicle[]; total: number; page: number; limit: number }>)
+    .then((data) => data.items);
 
 export const blockUser = (id: string, action: 'block' | 'unblock') =>
   apiClient.patch(`/admin/users/${id}/block`, { blocked: action === 'block' }).then(unwrap<AdminUser>);

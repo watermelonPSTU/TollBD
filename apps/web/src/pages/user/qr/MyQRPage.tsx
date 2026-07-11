@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
-import { RefreshCw, Share2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle, RefreshCw, Share2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import html2canvas from 'html2canvas';
-import { generateQR, getQR } from '@/api/qr.api';
+import { generateQR, getQR, getQRStatus, QRStatusResponse } from '@/api/qr.api';
 import { getMyVehicles } from '@/api/vehicle.api';
 import { AppBar, EmptyState, QRDisplay } from '@/components/shared';
 import { useCapacitor } from '@/hooks/useCapacitor';
+import { formatBDT } from '@/utils/format';
 
 export const MyQRPage = () => {
   const vehicles = useQuery({ queryKey: ['vehicles'], queryFn: getMyVehicles });
@@ -16,6 +17,25 @@ export const MyQRPage = () => {
   const qr = useQuery({ queryKey: ['qr', selected], queryFn: () => getQR(selected), enabled: Boolean(selected) });
   const queryClient = useQueryClient();
   const { shareContent } = useCapacitor();
+  const [paymentDone, setPaymentDone] = useState<QRStatusResponse | null>(null);
+
+  // Poll the displayed token so the user gets a popup the moment the gate scans it
+  const tokenId = qr.data?.tokenId;
+  const status = useQuery({
+    queryKey: ['qr-status', tokenId],
+    queryFn: () => getQRStatus(tokenId!),
+    enabled: Boolean(tokenId) && !paymentDone,
+    refetchInterval: 3000
+  });
+
+  useEffect(() => {
+    if (status.data?.used && !paymentDone) {
+      setPaymentDone(status.data);
+      queryClient.invalidateQueries({ queryKey: ['qr', selected] });
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    }
+  }, [status.data, paymentDone, queryClient, selected]);
   const mutation = useMutation({
     mutationFn: () => generateQR(selected),
     onSuccess: async () => {
@@ -111,6 +131,53 @@ export const MyQRPage = () => {
           />
         )}
       </section>
+
+      {/* Toll payment success popup */}
+      {paymentDone && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm rounded-3xl bg-surface p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle className="h-9 w-9 text-emerald-600" />
+            </div>
+            <h2 className="mt-4 font-bengali text-lg font-bold text-text-primary">টোল পেমেন্ট সফল!</h2>
+            <p className="mt-1 font-bengali text-sm text-text-secondary">আপনার QR স্ক্যান হয়েছে এবং টোল পরিশোধ হয়ে গেছে।</p>
+
+            <div className="mt-4 space-y-2 rounded-2xl bg-bg p-4 text-sm">
+              {paymentDone.vehiclePlate && (
+                <div className="flex justify-between">
+                  <span className="font-bengali text-text-muted">গাড়ি</span>
+                  <span className="font-mono font-bold text-text-primary">{paymentDone.vehiclePlate}</span>
+                </div>
+              )}
+              {paymentDone.bridgeName && (
+                <div className="flex justify-between">
+                  <span className="font-bengali text-text-muted">ব্রিজ</span>
+                  <span className="font-semibold text-text-primary">{paymentDone.bridgeName}</span>
+                </div>
+              )}
+              {paymentDone.amount != null && (
+                <div className="flex justify-between">
+                  <span className="font-bengali text-text-muted">পরিমাণ</span>
+                  <span className="text-lg font-bold text-emerald-600">{formatBDT(paymentDone.amount)}</span>
+                </div>
+              )}
+              {paymentDone.usedAt && (
+                <div className="flex justify-between">
+                  <span className="font-bengali text-text-muted">সময়</span>
+                  <span className="text-text-secondary">{new Date(paymentDone.usedAt).toLocaleString('bn-BD')}</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setPaymentDone(null)}
+              className="mt-5 w-full rounded-2xl bg-primary py-3.5 font-bengali font-bold text-white active:scale-[0.98] transition"
+            >
+              ঠিক আছে
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

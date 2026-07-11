@@ -21,3 +21,15 @@ export const generateQR = (vehicleId: string) => apiClient.post('/qr/generate', 
 export const getQR = (vehicleId: string) => apiClient.get(`/qr/${vehicleId}`).then(unwrap<QRResponse | null>);
 
 export const scanQR = (tokenData: string, bridgeId: string) => apiClient.post('/qr/scan', { tokenData, bridgeId }).then(unwrap<QRScanResponse>);
+
+export interface QRStatusResponse {
+  used: boolean;
+  usedAt?: string | null;
+  expiresAt?: string;
+  vehiclePlate?: string;
+  bridgeName?: string | null;
+  amount?: number | null;
+  status?: string | null;
+}
+
+export const getQRStatus = (tokenId: string) => apiClient.get(`/qr/status/${tokenId}`).then(unwrap<QRStatusResponse>);

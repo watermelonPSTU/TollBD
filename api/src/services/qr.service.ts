@@ -63,12 +63,44 @@ export const getCurrentQR = async (userId: string, vehicleId: string) => {
   };
 };
 
+export const getTokenStatus = async (userId: string, tokenId: string) => {
+  const token = await prisma.qrToken.findUnique({ where: { id: tokenId } });
+  if (!token || token.userId !== userId) {
+    throw new AppError('QR token not found', 404, 'QR_NOT_FOUND');
+  }
+
+  if (!token.used) {
+    return { used: false as const, expiresAt: token.expiresAt };
+  }
+
+  // The scan created the toll transaction moments before usedAt was stamped
+  const transaction = await prisma.transaction.findFirst({
+    where: {
+      vehicleId: token.vehicleId,
+      type: 'TOLL_PAYMENT',
+      ...(token.usedAtBridgeId ? { bridgeId: token.usedAtBridgeId } : {}),
+      ...(token.usedAt ? { createdAt: { gte: new Date(token.usedAt.getTime() - 60_000) } } : {})
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return {
+    used: true as const,
+    usedAt: token.usedAt,
+    vehiclePlate: token.vehiclePlate,
+    bridgeName: transaction?.bridgeName ?? null,
+    amount: transaction?.amount ?? null,
+    status: transaction?.status ?? null
+  };
+};
+
 export const validateAndUse = async (tokenData: string, bridgeId: string, _adminId: string) => {
   let payload: QRPayload;
   try {
     payload = jwt.verify(tokenData, qrSecret) as QRPayload;
   } catch {
-    throw new AppError('Invalid QR token', 401, 'INVALID_QR');
+    // 400, not 401 — a bad QR is a request error; 401 makes the web client clear the admin session
+    throw new AppError('Invalid QR token', 400, 'INVALID_QR');
   }
 
   const token = await prisma.qrToken.findUnique({

@@ -12,6 +12,11 @@ export const getCurrentQR = async (req: Request, res: Response) => {
   return success(res, qr);
 };
 
+export const getQRStatus = async (req: Request, res: Response) => {
+  const status = await qrService.getTokenStatus(req.user!.id, req.params.tokenId);
+  return success(res, status);
+};
+
 export const scanQR = async (req: Request, res: Response) => {
   const result = await qrService.validateAndUse(req.body.tokenData, req.body.bridgeId, req.user!.id);
   return success(res, result, 'QR scanned and toll charged');

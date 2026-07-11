@@ -38,3 +38,6 @@ adminRoutes.post('/announcements', validate(announcementSchema), adminController
 adminRoutes.patch('/announcements/:id', validate(updateAnnouncementSchema), adminController.updateAnnouncement);
 adminRoutes.delete('/announcements/:id', adminController.deleteAnnouncement);
 adminRoutes.post('/notifications/broadcast', validate(broadcastSchema), notificationController.broadcast);
+
+
+//test

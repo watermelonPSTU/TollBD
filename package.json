@@ -1,0 +1,11 @@
+{
+  "name": "tollbd",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "cd api && npm install && npx prisma generate && npm run build && cd ../apps/web && npm install && npm run build",
+    "start": "cd api && npx prisma migrate deploy && npm start"
+  }
+}

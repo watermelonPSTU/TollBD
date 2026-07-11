@@ -2,6 +2,7 @@ import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'node:fs';
 import path from 'node:path';
 import { env } from './config/env';
 import { errorMiddleware } from './middleware/error.middleware';
@@ -42,6 +43,22 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR), { maxAge: '1d' }));
+
+// Serve the built web app from the same server (single-service deploy).
+// __dirname is api/src in dev and api/dist in prod — both are two levels below repo root.
+const webDist = path.resolve(__dirname, '../../apps/web/dist');
+const hasWebDist = fs.existsSync(path.join(webDist, 'index.html'));
+if (hasWebDist) {
+  app.use(
+    express.static(webDist, {
+      maxAge: '1d',
+      setHeaders: (res, filePath) => {
+        // index.html must not be cached so new deploys show up immediately
+        if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+      }
+    })
+  );
+}
 app.use(requestLogger);
 
 app.get('/', (_req, res) => {
@@ -56,4 +73,13 @@ app.get('/health', (_req, res) => {
 app.use(generalLimiter);
 
 app.use('/api/v1', routes);
+
+// SPA fallback: any non-API GET serves the web app so client-side routes work on refresh
+if (hasWebDist) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') return next();
+    res.sendFile(path.join(webDist, 'index.html'));
+  });
+}
+
 app.use(errorMiddleware);

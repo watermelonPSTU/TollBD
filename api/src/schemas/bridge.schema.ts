@@ -16,7 +16,8 @@ export const bridgeCreateSchema = z.object({
   category: z.nativeEnum(BridgeCategory),
   authorityName: z.string().min(2).max(120),
   hasFastpass: z.coerce.boolean().optional(),
-  imageUrl: z.string().url().optional()
+  // Form sends '' when no image is given — treat empty as absent
+  imageUrl: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional())
 });
 
 export const bridgeUpdateSchema = bridgeCreateSchema.partial().extend({

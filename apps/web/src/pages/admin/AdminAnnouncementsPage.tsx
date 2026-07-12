@@ -31,7 +31,8 @@ export const AdminAnnouncementsPage = () => {
       title: form.title, titleBn: form.titleBn,
       body: form.body, bodyBn: form.bodyBn,
       type: form.type, targetBridgeIds: form.targetBridgeIds,
-      expiresAt: form.expiresAt || undefined
+      // datetime-local gives "YYYY-MM-DDTHH:mm" — the API expects full ISO 8601
+      expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined
     }),
     onSuccess: () => {
       toast.success('Announcement created');

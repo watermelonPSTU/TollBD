@@ -1,8 +1,9 @@
-import { ArrowLeft, Car, CheckCircle, Copy, ReceiptText, ShieldOff, UserCheck, Wallet } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, ArrowLeft, Car, CheckCircle, Copy, ReceiptText, ShieldOff, Trash2, UserCheck, Wallet } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { blockUser, getUserById } from '@/api/admin.api';
+import { blockUser, deleteUser, getUserById } from '@/api/admin.api';
 import { formatBDT, formatDateTime } from '@/utils/format';
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -46,6 +47,21 @@ export const UserDetailPage = () => {
     }
   });
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteMut = useMutation({
+    mutationFn: () => deleteUser(id!),
+    onSuccess: () => {
+      toast.success('User and all data deleted');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      navigate('/admin/users', { replace: true });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Delete failed');
+      setConfirmDelete(false);
+    }
+  });
+
   if (isLoading) return (
     <div className="flex items-center justify-center py-24">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -84,13 +100,24 @@ export const UserDetailPage = () => {
               </button>
             </div>
           </div>
-          <button
-            onClick={() => blockMut.mutate()}
-            disabled={blockMut.isPending}
-            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-50 ${user.status === 'BLOCKED' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
-          >
-            {user.status === 'BLOCKED' ? <><UserCheck className="h-4 w-4" /> Unblock</> : <><ShieldOff className="h-4 w-4" /> Block User</>}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => blockMut.mutate()}
+              disabled={blockMut.isPending}
+              className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-50 ${user.status === 'BLOCKED' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+            >
+              {user.status === 'BLOCKED' ? <><UserCheck className="h-4 w-4" /> Unblock</> : <><ShieldOff className="h-4 w-4" /> Block User</>}
+            </button>
+            {user.role !== 'ADMIN' && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleteMut.isPending}
+                className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> Delete User
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats row */}
@@ -173,6 +200,38 @@ export const UserDetailPage = () => {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900">Delete this user permanently?</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  <strong>{user.fullName}</strong> ({user.email}) — this removes the user along with{' '}
+                  <strong>{user._count?.vehicles ?? 0} vehicles</strong>, <strong>{user._count?.transactions ?? 0} transactions</strong>,
+                  wallet balance and QR passes. This cannot be undone.
+                </p>
+                <p className="font-bengali mt-2 text-xs text-red-500">সতর্কতা: user-এর সব data চিরতরে মুছে যাবে!</p>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setConfirmDelete(false)} className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600">Cancel</button>
+              <button
+                onClick={() => deleteMut.mutate()}
+                disabled={deleteMut.isPending}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> {deleteMut.isPending ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -42,6 +42,9 @@ export const getAllVehicles = (params?: { status?: string; page?: number; limit?
 export const blockUser = (id: string, action: 'block' | 'unblock') =>
   apiClient.patch(`/admin/users/${id}/block`, { blocked: action === 'block' }).then(unwrap<AdminUser>);
 
+export const deleteUser = (id: string) =>
+  apiClient.delete(`/admin/users/${id}`).then(unwrap<{ id: string; email: string }>);
+
 export const createBridge = (data: Omit<BridgeWithRate, 'id' | 'createdAt' | 'updatedAt' | 'tollRate'>) =>
   apiClient.post('/admin/bridges', data).then(unwrap<BridgeWithRate>);
 

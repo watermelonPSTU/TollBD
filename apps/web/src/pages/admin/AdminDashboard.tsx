@@ -58,8 +58,11 @@ export const AdminDashboard = () => {
     }
   });
 
+  // item.date is already a Dhaka-local date string — derive the weekday in UTC
+  // so the label never shifts with the viewer's browser timezone
   const chartData = (stats?.weeklyRevenue ?? []).map((item) => ({
-    day: DAY_BN[new Date(item.date).getDay()],
+    day: DAY_BN[new Date(item.date + 'T00:00:00Z').getUTCDay()],
+    date: item.date,
     revenue: item.amountPaisa / 100,
     raw: item.amountPaisa
   }));
@@ -117,7 +120,11 @@ export const AdminDashboard = () => {
               <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `৳${v}`} />
               <Tooltip
                 contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 12 }}
-                formatter={(v: unknown) => [`৳${(v as number).toFixed(0)}`, 'Revenue']}
+                formatter={(v: unknown) => [`৳${(v as number).toLocaleString()}`, 'Revenue']}
+                labelFormatter={(label, payload) => {
+                  const d = (payload?.[0]?.payload as { date?: string } | undefined)?.date;
+                  return d ? `${label} — ${d}` : String(label);
+                }}
               />
               <Area type="monotone" dataKey="revenue" stroke="#1B4FDB" strokeWidth={2.5} fill="url(#revenueGrad)" dot={{ r: 3, fill: '#1B4FDB' }} />
             </AreaChart>

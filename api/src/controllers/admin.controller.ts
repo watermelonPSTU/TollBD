@@ -4,14 +4,20 @@ import { prisma } from '../config/database';
 import { announcementSchema, updateAnnouncementSchema, revenueQuerySchema, usersQuerySchema } from '../schemas/admin.schema';
 import { success } from '../utils/response';
 
-const startOfToday = () => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
+// Revenue days follow Bangladesh time (UTC+6, no DST) — the server itself runs in UTC
+const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
+
+const startOfDhakaDay = (daysAgo = 0) => {
+  const shifted = new Date(Date.now() + DHAKA_OFFSET_MS);
+  shifted.setUTCHours(0, 0, 0, 0);
+  shifted.setUTCDate(shifted.getUTCDate() - daysAgo);
+  return new Date(shifted.getTime() - DHAKA_OFFSET_MS);
 };
 
+const dhakaDateKey = (date: Date) => new Date(date.getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
+
 export const dashboardStats = async (_req: Request, res: Response) => {
-  const today = startOfToday();
+  const today = startOfDhakaDay(0);
   const [todayAgg, todayTransactionCount, totalActiveUsers, pendingVehicleCount, paymentGroups] = await Promise.all([
     prisma.transaction.aggregate({
       where: { createdAt: { gte: today }, status: 'SUCCESS', type: 'TOLL_PAYMENT' },
@@ -29,16 +35,13 @@ export const dashboardStats = async (_req: Request, res: Response) => {
 
   const weeklyRevenue = await Promise.all(
     Array.from({ length: 7 }).map(async (_, index) => {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      start.setDate(start.getDate() - (6 - index));
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
+      const start = startOfDhakaDay(6 - index);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
       const aggregate = await prisma.transaction.aggregate({
         where: { createdAt: { gte: start, lt: end }, status: 'SUCCESS', type: 'TOLL_PAYMENT' },
         _sum: { amount: true }
       });
-      return { date: start.toISOString().slice(0, 10), amountPaisa: aggregate._sum.amount ?? 0 };
+      return { date: dhakaDateKey(start), amountPaisa: aggregate._sum.amount ?? 0 };
     })
   );
 
@@ -120,6 +123,37 @@ export const blockUser = async (req: Request, res: Response) => {
   return success(res, user, req.body.blocked ? 'User blocked' : 'User unblocked');
 };
 
+export const deleteUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (id === req.user!.id) {
+    return res.status(400).json({ success: false, data: null, message: 'You cannot delete your own account', error: { code: 'SELF_DELETE_FORBIDDEN', details: null } });
+  }
+
+  const target = await prisma.user.findUniqueOrThrow({ where: { id }, select: { id: true, role: true, email: true } });
+  if (target.role === 'ADMIN') {
+    return res.status(400).json({ success: false, data: null, message: 'Admin accounts cannot be deleted', error: { code: 'ADMIN_DELETE_FORBIDDEN', details: null } });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.findUnique({ where: { userId: id } });
+    if (wallet) {
+      await tx.walletTransaction.deleteMany({ where: { walletId: wallet.id } });
+    }
+    await tx.qrToken.deleteMany({ where: { userId: id } });
+    await tx.transaction.deleteMany({ where: { userId: id } });
+    await tx.vehicle.deleteMany({ where: { ownerId: id } });
+    if (wallet) {
+      await tx.wallet.delete({ where: { id: wallet.id } });
+    }
+    await tx.pushSubscription.deleteMany({ where: { userId: id } });
+    await tx.otp.deleteMany({ where: { userId: id } });
+    await tx.user.delete({ where: { id } });
+  });
+
+  return success(res, { id, email: target.email }, 'User and all related data deleted');
+};
+
 export const revenueStats = async (req: Request, res: Response) => {
   const query = revenueQuerySchema.parse(req.query);
   const from = query.from ? new Date(query.from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -130,10 +164,8 @@ export const revenueStats = async (req: Request, res: Response) => {
   });
   const buckets = new Map<string, number>();
   for (const transaction of transactions) {
-    const key =
-      query.groupBy === 'month'
-        ? transaction.createdAt.toISOString().slice(0, 7)
-        : transaction.createdAt.toISOString().slice(0, 10);
+    const dhakaDate = dhakaDateKey(transaction.createdAt);
+    const key = query.groupBy === 'month' ? dhakaDate.slice(0, 7) : dhakaDate;
     buckets.set(key, (buckets.get(key) ?? 0) + transaction.amount);
   }
   return success(res, Array.from(buckets.entries()).map(([date, amountPaisa]) => ({ date, amountPaisa })));
